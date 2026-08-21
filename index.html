@@ -1,71 +1,1409 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SIDALMAS - Kabupaten Malang</title>
-  
-  <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/5/53/Linmas_Logo.png" type="image/x-icon">
-  
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f4f6f9;
-    }
-    .iframe-container {
-      position: relative;
-      width: 100%;
-      height: 100vh;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-    /* Gaya Tampilan Loading Progresif */
-    .loader {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 1.1rem;
-      font-weight: 500;
-      color: #2c3e50;
-      z-index: 10;
-      text-align: center;
-    }
-    .spinner {
-      margin: 0 auto 10px auto;
-      width: 40px;
-      height: 40px;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #0056b3;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIDALMAS - Kabupaten Malang</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS Excel Library -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* CSS Reset untuk Tampilan Full Page di Template Blogger */
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow-x: hidden;
+            background-color: #f8fafc;
+        }
+        
+        /* Menyembunyikan Elemen Bawaan Blogger jika di-embed */
+        .header-outer, .nav-outer, .footer-outer, .sidebar-wrapper, .post-title, .post-footer, #header-wrapper, #footer-wrapper {
+            display: none !important;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+        
+        .spin-anim {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
 </head>
-<body>
-  <div class="iframe-container">
-    <div class="loader" id="loader">
-      <div class="spinner"></div>
-      <div>Memuat Sistem SIDALMAS...</div>
+<body class="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+
+    <!-- THUMBNAIL POSTINGAN BLOGGER (TERSEMBUNYI) -->
+    <div style="display:none !important;" aria-hidden="true">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Linmas_Logo.png/960px-Linmas_Logo.png" alt="SIDALMAS Kabupaten Malang" />
     </div>
-    
-    <iframe 
-      src="https://script.google.com/macros/s/AKfycbxDI-UESilWwdkiPbkQa-cVJ7nI3as8gLYaYbHX64T7R-_ECRe_MaTJoiHvSZ5R1pBn2w/exec" 
-      title="SIDALMAS Web App"
-      onload="document.getElementById('loader').style.display='none';"
-      allowfullscreen>
-    </iframe>
-  </div>
+
+    <!-- Loading Global Overlay -->
+    <div id="global-loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center hidden">
+        <div class="bg-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3">
+            <div class="w-6 h-6 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-xs font-bold text-slate-700" id="loader-text">Memproses Data...</span>
+        </div>
+    </div>
+
+    <!-- Notifikasi Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-white/10 text-xs font-bold">
+            <span id="toast-icon" class="text-teal-400">✓</span>
+            <span id="toast-text">Berhasil memperbarui data</span>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden p-6 text-center space-y-4">
+            <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+            </div>
+            <h3 id="confirm-title" class="font-bold text-slate-900 text-sm">Konfirmasi Tindakan</h3>
+            <p id="confirm-desc" class="text-xs text-slate-500 leading-relaxed"></p>
+            <div class="flex justify-center gap-3 pt-2">
+                <button id="confirm-btn-cancel" class="px-4 py-2 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition">Batal</button>
+                <button id="confirm-btn-yes" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-md transition">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tampilan Login Screen -->
+    <div id="login-screen" class="flex-1 flex flex-col items-center justify-center p-4 relative overflow-hidden bg-gradient-to-tr from-teal-700 via-teal-600 to-cyan-600 min-h-screen">
+        <div class="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[520px]">
+            <!-- Sisi Banner Left -->
+            <div class="md:w-1/2 bg-gradient-to-br from-teal-800 to-slate-900 p-8 flex flex-col justify-center items-center text-center text-white relative">
+                <div class="w-32 h-32 bg-white rounded-full p-3 shadow-2xl flex items-center justify-center mb-6 border-4 border-teal-400/30">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Linmas_Logo.png/960px-Linmas_Logo.png" alt="Logo Linmas" class="w-full h-full object-contain" />
+                </div>
+                <h1 class="text-3xl font-black tracking-wider drop-shadow-md text-teal-300">SIDALMAS</h1>
+                <p class="mt-2 text-xs text-slate-300 max-w-xs leading-relaxed font-medium">
+                    Sistem Informasi Data Linmas & KTA Digital Terpusat Kabupaten Malang.
+                </p>
+                <div class="mt-6 px-4 py-1.5 bg-white/10 rounded-full text-[10px] font-semibold uppercase tracking-widest border border-white/20">
+                    Satpol PP Kabupaten Malang
+                </div>
+            </div>
+
+            <!-- Sisi Form Right -->
+            <div class="md:w-1/2 p-8 md:p-10 flex flex-col justify-center bg-white">
+                <div class="text-center md:text-left mb-6">
+                    <h2 class="text-2xl font-bold text-slate-800">Masuk ke Sistem</h2>
+                    <p class="text-xs text-slate-500 mt-1">Silakan masukkan akun petugas Anda</p>
+                </div>
+
+                <div id="login-error" class="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs rounded-xl hidden">
+                    Email atau Password salah / akun diblokir!
+                </div>
+
+                <form id="form-login" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Email / Username</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i data-lucide="user" class="w-4 h-4"></i>
+                            </span>
+                            <input type="text" id="input-email" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-xs bg-slate-50" placeholder="Masukkan email atau username" required />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i data-lucide="lock" class="w-4 h-4"></i>
+                            </span>
+                            <input type="password" id="input-password" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-xs bg-slate-50" placeholder="Masukkan password" required />
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition duration-150 shadow-lg shadow-teal-600/30 text-xs uppercase tracking-wider">
+                        Masuk Sekarang
+                    </button>
+                </form>
+
+                <div class="mt-6 text-center text-[11px] text-slate-400">
+                    Bantuan sistem? <span class="text-teal-600 font-bold hover:underline cursor-pointer" onclick="showToast('Hubungi Admin Satpol PP Kab. Malang', 'ℹ️')">Kontak Admin</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Akun Demo untuk Pengujian -->
+        <div class="w-full max-w-4xl mt-6 bg-slate-900/90 backdrop-blur-md rounded-2xl p-4 text-white border border-white/10 shadow-xl">
+            <h4 class="text-[11px] font-extrabold uppercase tracking-widest text-teal-400 mb-2 flex items-center gap-1.5">
+                <i data-lucide="shield" class="w-4 h-4"></i> DOKUMENTASI AKUN DEMO (MODE PREVIEW ACTIVE):
+            </h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                <div class="p-2 bg-white/5 rounded-xl border border-white/10">
+                    <span class="font-bold text-teal-300">🔑 Super Admin</span>
+                    <p class="text-slate-300">User: <span class="font-mono text-white">admin@malangkab.go.id</span></p>
+                    <p class="text-slate-300">Pass: <span class="font-mono text-white">admin</span></p>
+                </div>
+                <div class="p-2 bg-white/5 rounded-xl border border-white/10">
+                    <span class="font-bold text-sky-300">🔑 Admin Demo</span>
+                    <p class="text-slate-300">User: <span class="font-mono text-white">admin</span></p>
+                    <p class="text-slate-300">Pass: <span class="font-mono text-white">edudigital</span></p>
+                </div>
+                <div class="p-2 bg-white/5 rounded-xl border border-white/10">
+                    <span class="font-bold text-amber-300">🔑 Peserta Demo</span>
+                    <p class="text-slate-300">User: <span class="font-mono text-white">peserta</span></p>
+                    <p class="text-slate-300">Pass: <span class="font-mono text-white">edudigital</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layar Utama Aplikasi (App Screen) -->
+    <div id="app-screen" class="flex-1 flex flex-col hidden">
+        <!-- Header Utama -->
+        <header class="bg-slate-900 text-white shadow-md flex-shrink-0 border-b border-teal-500/30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div class="flex items-center gap-3 cursor-pointer" onclick="showView('dashboard')">
+                    <div class="w-10 h-10 bg-white rounded-full p-1 shadow flex items-center justify-center">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Linmas_Logo.png/960px-Linmas_Logo.png" alt="Logo Linmas" class="w-full h-full object-contain" />
+                    </div>
+                    <div>
+                        <h1 class="font-black tracking-wider text-base sm:text-lg text-teal-400">SIDALMAS</h1>
+                        <p class="text-[9px] text-slate-300 uppercase tracking-widest hidden sm:block">Kabupaten Malang</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="text-right hidden md:block">
+                        <div id="profile-name" class="text-xs font-semibold text-slate-100">Loading...</div>
+                        <div id="profile-role" class="text-[9px] bg-teal-900/80 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full inline-block font-bold">Role</div>
+                    </div>
+                    <div class="h-8 w-px bg-white/10 hidden md:block"></div>
+                    
+                    <button onclick="refreshData()" class="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 rounded-xl text-xs font-bold transition shadow-md">
+                        <i id="icon-refresh" data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Refresh</span>
+                    </button>
+
+                    <button type="button" onclick="logout()" class="flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 rounded-xl text-xs font-bold transition shadow-md">
+                        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                        <span class="inline">Keluar</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Bar (Tabs) -->
+        <div class="bg-white border-b border-slate-200 flex-shrink-0 shadow-sm sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center gap-2 py-2.5 overflow-x-auto no-scrollbar scroll-smooth">
+                    <button onclick="showView('dashboard')" id="tab-dashboard" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-teal-600 text-white shadow whitespace-nowrap">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+                    </button>
+                    <button onclick="showView('linmas')" id="tab-linmas" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+                        <i data-lucide="users" class="w-4 h-4"></i> Data Linmas (13 Kolom)
+                    </button>
+                    <button onclick="showView('sk')" id="tab-sk" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+                        <i data-lucide="shield" class="w-4 h-4"></i> SK Satlinmas
+                    </button>
+                    <button onclick="showView('kta')" id="tab-kta" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+                        <i data-lucide="credit-card" class="w-4 h-4"></i> KTA Satlinmas
+                    </button>
+                    <button onclick="showView('log')" id="tab-log" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+                        <i data-lucide="history" class="w-4 h-4"></i> Log Status
+                    </button>
+                    <button onclick="showView('pengguna')" id="tab-pengguna" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 whitespace-nowrap hidden">
+                        <i data-lucide="user-cog" class="w-4 h-4"></i> Kelola Pengguna
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 overflow-y-auto">
+
+            <!-- VIEW: DASHBOARD -->
+            <section id="view-dashboard" class="space-y-6 animate-fadeIn">
+                <div class="bg-gradient-to-r from-teal-800 via-teal-700 to-sky-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+                    <div class="relative z-10 max-w-2xl">
+                        <span class="text-[10px] bg-teal-900/60 font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-teal-400/30">SATU DATA SATLINMAS</span>
+                        <h2 id="welcome-message" class="text-2xl sm:text-3xl font-black mt-3">Selamat Datang di SIDALMAS!</h2>
+                        <p class="mt-2 text-xs sm:text-sm text-teal-100 leading-relaxed">
+                            Sistem Terintegrasi Pendataan Anggota Linmas, Arsip SK, dan Penerbitan KTA Digital Kabupaten Malang.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center flex flex-col justify-center">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Anggota Linmas</span>
+                        <span id="stat-linmas" class="text-2xl font-black text-teal-600 block mt-1">0</span>
+                        <div class="mt-2 pt-2 border-t border-slate-100 flex justify-center gap-2 text-[10px] font-bold">
+                            <span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Aktif: <span id="stat-linmas-aktif">0</span></span>
+                            <span class="text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">Non-Aktif: <span id="stat-linmas-nonaktif">0</span></span>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Arsip SK Resmi</span>
+                        <span id="stat-sk" class="text-2xl font-black text-amber-600 block mt-1">0</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Berkas KTA</span>
+                        <span id="stat-kta" class="text-2xl font-black text-sky-600 block mt-1">0</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Log Aktivitas</span>
+                        <span id="stat-logs" class="text-2xl font-black text-red-600 block mt-1">0</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase block">Pengguna Sistem</span>
+                        <span id="stat-pengguna" class="text-2xl font-black text-indigo-600 block mt-1">0</span>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Sebaran Linmas per Kecamatan</h4>
+                        <div class="w-full h-56 relative"><canvas id="chartKecamatan"></canvas></div>
+                    </div>
+                    <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Top Desa/Kelurahan</h4>
+                        <div class="w-full h-56 relative"><canvas id="chartDesa"></canvas></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: DATA LINMAS (FORMAT PERSIS 13 KOLOM) -->
+            <section id="view-linmas" class="space-y-6 animate-fadeIn hidden">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <button onclick="showView('dashboard')" class="text-xs text-teal-600 font-bold hover:underline mb-1 inline-block">&larr; Kembali ke Dashboard</button>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="users" class="w-6 h-6 text-teal-600"></i> Database Anggota Linmas (13 Kolom)
+                        </h2>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openAddLinmasModal()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i> Tambah Anggota
+                        </button>
+                        <button onclick="downloadExcelLinmas()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Ekspor Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search & Filter -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="search-linmas" oninput="currentPageLinmas=1; renderLinmasTable()" class="flex-1 px-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Cari Nama, NIK, Desa, Kecamatan, Dusun, atau Pekerjaan..." />
+                    <select id="filter-linmas-status" onchange="currentPageLinmas=1; renderLinmasTable()" class="px-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-teal-500 outline-none">
+                        <option value="">Semua Status</option>
+                        <option value="Aktif">Aktif</option>
+                        <option value="Non-Aktif">Non-Aktif</option>
+                    </select>
+                </div>
+
+                <!-- Table 13 Kolom Presisi -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left border-collapse text-xs border border-slate-200 min-w-[1100px]">
+                            <thead>
+                                <tr class="bg-slate-100 border-b border-slate-200 text-slate-700 text-[10px] font-black uppercase text-center">
+                                    <th rowspan="2" class="py-3 px-3 border-r border-slate-200 align-middle">ID LINMAS</th>
+                                    <th rowspan="2" class="py-3 px-3 border-r border-slate-200 align-middle text-left">NAMA</th>
+                                    <th rowspan="2" class="py-3 px-3 border-r border-slate-200 align-middle">NIK</th>
+                                    <th colspan="4" class="py-2 px-3 border-b border-r border-slate-200 text-center bg-teal-50 text-teal-800">ALAMAT</th>
+                                    <th colspan="3" class="py-2 px-3 border-b border-r border-slate-200 text-center bg-sky-50 text-sky-800">LAHIR</th>
+                                    <th rowspan="2" class="py-3 px-3 border-r border-slate-200 align-middle">KECAMATAN</th>
+                                    <th rowspan="2" class="py-3 px-3 border-r border-slate-200 align-middle text-left">PROFESI / PEKERJAAN</th>
+                                    <th rowspan="2" class="py-3 px-3 border-r border-slate-200 align-middle">STATUS</th>
+                                    <th rowspan="2" class="py-3 px-3 align-middle">AKSI</th>
+                                </tr>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[9px] font-bold uppercase text-center">
+                                    <th class="py-2 px-3 border-r border-slate-200 bg-teal-50/50">DESA/KEL</th>
+                                    <th class="py-2 px-3 border-r border-slate-200">DUSUN</th>
+                                    <th class="py-2 px-3 border-r border-slate-200">RT</th>
+                                    <th class="py-2 px-3 border-r border-slate-200">RW</th>
+                                    <th class="py-2 px-3 border-r border-slate-200 bg-sky-50/50">TGL</th>
+                                    <th class="py-2 px-3 border-r border-slate-200 bg-sky-50/50">BULAN</th>
+                                    <th class="py-2 px-3 border-r border-slate-200 bg-sky-50/50">TAHUN</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-linmas-body" class="divide-y divide-slate-100 text-slate-700">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-slate-100">
+                        <p class="text-xs text-slate-500">
+                            Menampilkan <span id="linmas-start-idx" class="font-bold">0</span> - <span id="linmas-end-idx" class="font-bold">0</span> dari <span id="linmas-total-count" class="font-bold">0</span> data
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <button onclick="prevPageLinmas()" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50">Sebelumnya</button>
+                            <button onclick="nextPageLinmas()" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50">Berikutnya</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: SK SATLINMAS -->
+            <section id="view-sk" class="space-y-6 animate-fadeIn hidden">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <button onclick="showView('dashboard')" class="text-xs text-amber-600 font-bold hover:underline mb-1 inline-block">&larr; Kembali ke Dashboard</button>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="shield" class="w-6 h-6 text-amber-600"></i> Arsip SK Satlinmas Kelurahan/Desa
+                        </h2>
+                    </div>
+                    <button onclick="openAddSKModal()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition">
+                        <i data-lucide="upload" class="w-4 h-4"></i> Unggah SK Baru
+                    </button>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <input type="text" id="search-sk" oninput="currentPageSK=1; renderSKTable()" class="w-full px-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Cari No. SK, Kecamatan, atau Desa..." />
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                    <th class="py-3 px-4">ID SK</th>
+                                    <th class="py-3 px-4">No. SK Resmi</th>
+                                    <th class="py-3 px-4">Tanggal SK</th>
+                                    <th class="py-3 px-4">Kecamatan</th>
+                                    <th class="py-3 px-4">Desa / Kelurahan</th>
+                                    <th class="py-3 px-4 text-center">Berkas Drive</th>
+                                    <th class="py-3 px-4 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-sk-body" class="divide-y divide-slate-100 text-slate-700">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: KTA SATLINMAS (SESUAI REQUEST FORMAT BARU 5 KOLOM) -->
+            <section id="view-kta" class="space-y-6 animate-fadeIn hidden">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <button onclick="showView('dashboard')" class="text-xs text-sky-600 font-bold hover:underline mb-1 inline-block">&larr; Kembali ke Dashboard</button>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="credit-card" class="w-6 h-6 text-sky-600"></i> Modul KTA Satlinmas
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Format 5 Kolom: ID_DESA | Tanggal_CETAK | Kecamatan | Desa_Kelurahan | Link_File_Drive</p>
+                    </div>
+                    <button onclick="openAddKtaModal()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Tambah Data KTA
+                    </button>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <input type="text" id="search-kta" oninput="currentPageKTA=1; renderKtaTable()" class="w-full px-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:ring-2 focus:ring-sky-500 outline-none" placeholder="Cari ID Desa, Kecamatan, Desa, atau Tanggal Cetak..." />
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider text-center">
+                                    <th class="py-3 px-4 text-left">ID DESA</th>
+                                    <th class="py-3 px-4">TANGGAL CETAK</th>
+                                    <th class="py-3 px-4">KECAMATAN</th>
+                                    <th class="py-3 px-4">DESA / KELURAHAN</th>
+                                    <th class="py-3 px-4">LINK FILE DRIVE</th>
+                                    <th class="py-3 px-4">AKSI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-kta-body" class="divide-y divide-slate-100 text-slate-700">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: LOG STATUS -->
+            <section id="view-log" class="space-y-6 animate-fadeIn hidden">
+                <div>
+                    <button onclick="showView('dashboard')" class="text-xs text-red-600 font-bold hover:underline mb-1 inline-block">&larr; Kembali ke Dashboard</button>
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="history" class="w-6 h-6 text-red-600"></i> Log Riwayat Perubahan Status</h2>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                    <th class="py-3 px-4">ID Log</th>
+                                    <th class="py-3 px-4">ID Referensi</th>
+                                    <th class="py-3 px-4">Waktu</th>
+                                    <th class="py-3 px-4">Status Baru</th>
+                                    <th class="py-3 px-4">Catatan</th>
+                                    <th class="py-3 px-4">Operator</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-log-body" class="divide-y divide-slate-100 text-slate-700">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: ATUR AKUN / PENGGUNA -->
+            <section id="view-pengguna" class="space-y-6 animate-fadeIn hidden">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <button onclick="showView('dashboard')" class="text-xs text-purple-600 font-bold hover:underline mb-1 inline-block">&larr; Kembali ke Dashboard</button>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i data-lucide="user-cog" class="w-6 h-6 text-purple-600"></i> Pengaturan Akun & Akses</h2>
+                    </div>
+                    <button onclick="openAddPenggunaModal()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i> Tambah Akun
+                    </button>
+                </div>
+                
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                    <th class="py-3 px-4">Nama Akun</th>
+                                    <th class="py-3 px-4">Email & Role</th>
+                                    <th class="py-3 px-4">Wilayah Tugas</th>
+                                    <th class="py-3 px-4 text-center">Status</th>
+                                    <th class="py-3 px-4 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-pengguna-body" class="divide-y divide-slate-100 text-slate-700">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL TAMBAH/EDIT ANGGOTA LINMAS -->
+    <div id="modal-linmas" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50 overflow-y-auto">
+        <div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 id="linmas-modal-title" class="font-bold text-slate-800 text-sm">Tambah Anggota Linmas Baru</h3>
+                <button onclick="closeModal('modal-linmas')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="form-linmas" onsubmit="submitLinmasData(event)" class="p-6 space-y-4 overflow-y-auto custom-scrollbar text-xs">
+                <input type="hidden" id="linmas-id-edit" />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Nama Lengkap *</label>
+                        <input type="text" id="add-linmas-nama" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required />
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">NIK (16 Digit) *</label>
+                        <input type="text" id="add-linmas-nik" maxlength="16" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono" required />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Kecamatan *</label>
+                        <select id="add-linmas-kec" onchange="updateDesaDropdown('add-linmas-kec', 'add-linmas-desa')" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required></select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Desa / Kelurahan *</label>
+                        <select id="add-linmas-desa" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required></select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="col-span-2">
+                        <label class="block font-bold text-slate-600 mb-1">Dusun / Jalan</label>
+                        <input type="text" id="add-linmas-dusun" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" />
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">RT / RW</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="add-linmas-rt" placeholder="RT" class="w-1/2 px-2 py-2 border border-slate-200 rounded-xl bg-slate-50 text-center" />
+                            <input type="text" id="add-linmas-rw" placeholder="RW" class="w-1/2 px-2 py-2 border border-slate-200 rounded-xl bg-slate-50 text-center" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Tgl Lahir</label>
+                        <select id="add-linmas-tgl" class="w-full px-2 py-2 border border-slate-200 rounded-xl bg-slate-50"></select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Bulan Lahir</label>
+                        <select id="add-linmas-bln" class="w-full px-2 py-2 border border-slate-200 rounded-xl bg-slate-50">
+                            <option value="">Bulan</option>
+                            <option value="Januari">Januari</option><option value="Februari">Februari</option><option value="Maret">Maret</option>
+                            <option value="April">April</option><option value="Mei">Mei</option><option value="Juni">Juni</option>
+                            <option value="Juli">Juli</option><option value="Agustus">Agustus</option><option value="September">September</option>
+                            <option value="Oktober">Oktober</option><option value="November">November</option><option value="Desember">Desember</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Tahun Lahir</label>
+                        <input type="number" id="add-linmas-thn" placeholder="1985" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-center" />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Profesi / Pekerjaan</label>
+                        <input type="text" id="add-linmas-pekerjaan" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" placeholder="Petani, Swasta, dll." />
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Status Keaktifan</label>
+                        <select id="add-linmas-status" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50">
+                            <option value="Aktif">Aktif</option>
+                            <option value="Non-Aktif">Non-Aktif</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg mt-2">
+                    Simpan Data Linmas
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL TAMBAH/EDIT KTA (5 KOLOM BARU) -->
+    <div id="modal-kta" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50 overflow-y-auto">
+        <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 id="kta-modal-title" class="font-bold text-slate-800 text-sm">Tambah Data KTA Satlinmas</h3>
+                <button onclick="closeModal('modal-kta')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="form-kta" onsubmit="submitKtaData(event)" class="p-6 space-y-4 overflow-y-auto text-xs">
+                <input type="hidden" id="kta-id-edit" />
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">ID Desa *</label>
+                    <input type="text" id="add-kta-iddesa" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono" placeholder="Contoh: DESA350701" required />
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Tanggal Cetak *</label>
+                    <input type="date" id="add-kta-tglcetak" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Kecamatan *</label>
+                        <select id="add-kta-kec" onchange="updateDesaDropdown('add-kta-kec', 'add-kta-desa')" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required></select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Desa / Kelurahan *</label>
+                        <select id="add-kta-desa" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required></select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Link File Drive KTA / Berkas *</label>
+                    <input type="url" id="add-kta-link" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" placeholder="https://drive.google.com/file/d/..." required />
+                </div>
+                <button type="submit" class="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold shadow-lg mt-2">
+                    Simpan Data KTA
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL TAMBAH SK -->
+    <div id="modal-sk" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-slate-800 text-sm">Unggah SK Satlinmas</h3>
+                <button onclick="closeModal('modal-sk')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="form-sk" onsubmit="submitSKData(event)" class="p-6 space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">No. SK Resmi *</label>
+                    <input type="text" id="add-sk-nosk" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" placeholder="140/390/35.07.12.2003/2026" required />
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Tanggal SK *</label>
+                    <input type="date" id="add-sk-tgl" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Kecamatan *</label>
+                        <select id="add-sk-kec" onchange="updateDesaDropdown('add-sk-kec', 'add-sk-desa')" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required></select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Desa / Kelurahan *</label>
+                        <select id="add-sk-desa" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required></select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Link Google Drive SK *</label>
+                    <input type="url" id="add-sk-link" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" placeholder="https://drive.google.com/..." required />
+                </div>
+                <button type="submit" class="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-lg">
+                    Simpan Arsip SK
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL TAMBAH PENGGUNA -->
+    <div id="modal-pengguna" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 id="pengguna-modal-title" class="font-bold text-slate-800 text-sm">Tambah Akun Pengguna</h3>
+                <button onclick="closeModal('modal-pengguna')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="form-pengguna" onsubmit="submitPenggunaData(event)" class="p-6 space-y-4 text-xs">
+                <input type="hidden" id="pengguna-id-edit" />
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Nama Pengguna *</label>
+                    <input type="text" id="pengguna-form-nama" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required />
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Email / Username *</label>
+                    <input type="text" id="pengguna-form-email" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required />
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Password</label>
+                    <input type="text" id="pengguna-form-password" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-mono" placeholder="Biarkan kosong jika tidak diubah" />
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Role *</label>
+                    <select id="pengguna-form-role" onchange="onRoleChange()" class="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50" required>
+                        <option value="SUPERADMIN">SUPERADMIN (Semua Wilayah)</option>
+                        <option value="ADMIN">ADMIN (Per Kecamatan)</option>
+                        <option value="USER">USER (Per Desa/Kelurahan)</option>
+                    </select>
+                </div>
+                <div id="wilayah-checkbox-wrapper">
+                    <label class="block font-bold text-slate-600 mb-1">Wilayah Tugas</label>
+                    <div id="wilayah-checkbox-list" class="border border-slate-200 rounded-xl p-2 max-h-36 overflow-y-auto text-[11px] space-y-1 custom-scrollbar"></div>
+                </div>
+                <button type="submit" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-lg">
+                    Simpan Akun
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPT APPLICATION LOGIC -->
+    <script>
+        // KONFIGURASI SAKLAR DEPLOYMENT
+        const IS_PREVIEW = true; // Set false jika sudah di-deploy ke WebApp GAS di Blogger
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxDI-UESilWwdkiPbkQa-cVJ7nI3as8gLYaYbHX64T7R-_ECRe_MaTJoiHvSZ5R1pBn2w/exec";
+
+        // DATABASE KABUPATEN MALANG LENGKAP
+        const DATA_WILAYAH = {
+            "Ampelgading": ["Argoyuwono", "Lebakharjo", "Mulyoasri", "Purwoharjo", "Sidorenggo", "Simojayan", "Sonowangi", "Tamanasri", "Tamansari", "Tawangagung", "Tirtomarto", "Tirtomoyo", "Wirotaman"],
+            "Bantur": ["Bandungrejo", "Bantur", "Karangsari", "Pringgodani", "Rejosari", "Rejoyoso", "Srigonco", "Sumberbening", "Wonokerto", "Wonorejo"],
+            "Bululawang": ["Bakalan", "Bululawang", "Gading", "Kasembon", "Kasri", "Krebet", "Krebet Senggrong", "Kuwolu", "Lumbangsari", "Pringu", "Sempalwadak", "Sudimoro", "Sukonolo", "Wandanpuro"],
+            "Dampit": ["Amadanom", "Baturetno", "Bumirejo", "Jambangan", "Majangtengah", "Pamotan", "Pojok", "Rembun", "Srimulyo", "Sukodono", "Sumbersuko", "Dampit"],
+            "Dau": ["Gadingkulon", "Kalisongo", "Karangwidoro", "Kucur", "Landungsari", "Mulyoagung", "Petungsewu", "Selorejo", "Sumbersekar", "Tegalweru"],
+            "Donomulyo": ["Banjarejo", "Donomulyo", "Kedungsalam", "Mentaraman", "Purwodadi", "Purworejo", "Sumberoto", "Tempursari", "Tlogosari", "Tulungrejo"],
+            "Gedangan": ["Gajahrejo", "Gedangan", "Girimulyo", "Segaran", "Sidodadi", "Sindurejo", "Sumberejo", "Tumpakrejo"],
+            "Gondanglegi": ["Bulupitu", "Ganjaran", "Gondanglegi Kulon", "Gondanglegi Wetan", "Ketawang", "Panggungrejo", "Putat Kidul", "Putat Lor", "Putukrejo", "Sepanjang", "Sukorejo", "Sukosari", "Sumberjaya", "Urek-Urek"],
+            "Jabung": ["Argosari", "Gadingkembar", "Gunung Jati", "Jabung", "Kemantren", "Kemiri", "Kenongo", "Ngadirejo", "Pandansari Lor", "Sidomulyo", "Sidorejo", "Slamparejo", "Sukolilo", "Sukopuro", "Taji"],
+            "Kalipare": ["Arjosari", "Arjowilangun", "Kaliasri", "Kalipare", "Kalirejo", "Putukrejo", "Sukowilangun", "Sumberpetung", "Tumpakrejo"],
+            "Karangploso": ["Ampeldento", "Bocek", "Donowarih", "Girimoyo", "Kepuharjo", "Ngenep", "Ngijo", "Tawangargo", "Tegalgondo"],
+            "Kasembon": ["Bayem", "Kasembon", "Pait", "Pondokagung", "Sukosari", "Wonoagung"],
+            "Kepanjen": ["Curungrejo", "Dilem", "Jatirejoyoso", "Jenggolo", "Kedungpedaringan", "Kemiri", "Mangunrejo", "Mojosari", "Ngadilangkung", "Panggungrejo", "Sengguruh", "Sukoraharjo", "Talangagung", "Tegalsari", "Ardirejo", "Cepokomulyo", "Kepanjen", "Penarukan"],
+            "Kromengan": ["Jambuwer", "Jatikerto", "Karangrejo", "Kromengan", "Ngadirejo", "Peniwen", "Slorok"],
+            "Lawang": ["Bedali", "Ketindan", "Mulyoarjo", "Sidodadi", "Sidoluhur", "Srigading", "Sumberngepoh", "Sumberporong", "Turirejo", "Wonorejo", "Kalirejo", "Lawang"],
+            "Ngajum": ["Babadan", "Balesari", "Banjarsari", "Kesamben", "Kranggan", "Maguan", "Ngajum", "Ngasem", "Palaan"],
+            "Ngantang": ["Banjarejo", "Banturejo", "Jombok", "Kaumrejo", "Mulyorejo", "Ngantru", "Pagersari", "Pandansari", "Purworejo", "Sidoluhur", "Sumberagung", "Tulungrejo", "Waturejo"],
+            "Pagak": ["Gampingan", "Pagak", "Pandanrejo", "Sempol", "Sumberejo", "Sumberkerto", "Sumbermanjing Kulon", "Tlogorejo"],
+            "Pagelaran": ["Balearjo", "Banjarejo", "Brongkal", "Clumprit", "Kademangan", "Kanigoro", "Karangsuko", "Pagelaran", "Sidorejo", "Suwaru"],
+            "Pakis": ["Ampeldento", "Asrikaton", "Banjarejo", "Bunutwetan", "Kedungrejo", "Mangliawan", "Pakiskembar", "Pucangsongo", "Saptorenggo", "Sekarpuro", "Sukoanyar", "Sumberkradenan", "Sumberpasir", "Tirtomoyo"],
+            "Pakisaji": ["Genengan", "Glanggang", "Jatisari", "Karangduren", "Karangpandan", "Kebonagung", "Kendalpayak", "Pakisaji", "Permanu", "Sutojayan", "Wadung", "Wonokerso"],
+            "Poncokusumo": ["Argosuko", "Belung", "Dawuhan", "Gubukklakah", "Jambesari", "Karanganyar", "Karangnongko", "Ngadas", "Ngadireso", "Ngebruk", "Pajaran", "Pandansari", "Poncokusumo", "Sumberejo", "Wonomulyo", "Wonorejo", "Wringinanom"],
+            "Pujon": ["Bendosari", "Madiredo", "Ngabab", "Ngroto", "Pandesari", "Pujon Kidul", "Pujon Lor", "Sukomulyo", "Tawangsari", "Wiyurejo"],
+            "Singosari": ["Ardimulyo", "Banjararum", "Baturetno", "Dengkol", "Gunungrejo", "Klampok", "Lang-Lang", "Purwoasri", "Randuagung", "Tamanharjo", "Toyomarto", "Tunjungtirto", "Watugede", "Wonorejo", "Candirenggo", "Losari", "Pagentan"],
+            "Sumbermanjing Wetan": ["Argotirto", "Druju", "Harjokuncaran", "Kedungbanteng", "Klepu", "Ringinkembar", "Ringinsari", "Sekarbanyu", "Sidoasri", "Sitiarjo", "Sumberagung", "Sumbermanjing Wetan", "Tambakasri", "Tambakrejo", "Tegalrejo"],
+            "Sumberpucung": ["Jatiguwi", "Karangkates", "Ngebruk", "Sambigede", "Senggreng", "Sumberpucung", "Ternyang"],
+            "Tajinan": ["Gunungronggo", "Gunungsari", "Jambearjo", "Jatisari", "Ngawonggo", "Pandanmulyo", "Purwosekar", "Randugading", "Sumbersuko", "Tajinan", "Tambakasri", "Tangkilsari"],
+            "Tirtoyudo": ["Ampelgading", "Gadungsari", "Jogomulyan", "Kepatihan", "Pujiharjo", "Purwodadi", "Sukorejo", "Sumbertangkil", "Tamankuncaran", "Tamansatriyan", "Tirtoyudo", "Tlogosari", "Wonoagung"],
+            "Tumpang": ["Benjor", "Bokor", "Duwet", "Duwet Krajan", "Jeru", "Kambingan", "Kidal", "Malangsuko", "Ngingit", "Pandanajeng", "Pulungdowo", "Slamet", "Tulusbesar", "Tumpang", "Wringinsongo"],
+            "Turen": ["Gedog Kulon", "Gedog Wetan", "Jeru", "Kedok", "Kemulan", "Pagedangan", "Sanankerto", "Sananrejo", "Sawahan", "Talangsuko", "Talok", "Tanggung", "Tawangrejeni", "Tumpukrenteng", "Undaan", "Sedayu", "Turen"],
+            "Wagir": ["Dalisodo", "Gondowangi", "Jedong", "Mendalanwangi", "Pandanlandung", "Pandanrejo", "Parangargo", "Petungsewu", "Sidorahayu", "Sitirejo", "Sukodadi", "Sumbersuko"],
+            "Wajak": ["Bambang", "Blayu", "Bringin", "Codo", "Dadapan", "Kidangbang", "Ngembal", "Patokpicis", "Sukoanyar", "Sukolilo", "Sumberputih", "Wajak", "Wonoayu"],
+            "Wonosari": ["Bangelan", "Kebobang", "Kluwut", "Plandi", "Plaosan", "Sumberdem", "Sumbertempur", "Wonosari"]
+        };
+
+        // GLOBAL STATE
+        let currentUser = null;
+        let databasePengguna = [];
+        let databaseLinmas = [];
+        let skSatlinmas = [];
+        let logStatus = [];
+        let databaseKta = [];
+
+        let currentActiveView = 'dashboard';
+        let confirmCallback = null;
+
+        let currentPageLinmas = 1;
+        let pageSizeLinmas = 10;
+        let currentPageSK = 1;
+        let pageSizeSK = 10;
+        let currentPageKTA = 1;
+        let pageSizeKTA = 10;
+
+        let chartInstanceKec, chartInstanceDesa;
+
+        window.onload = function() {
+            lucide.createIcons();
+            populateAllLocationDropdowns();
+            setupTanggalLahirOptions();
+        };
+
+        function showLoader(visible, text = "Memproses Data...") {
+            document.getElementById('loader-text').innerText = text;
+            const loader = document.getElementById('global-loader');
+            if (visible) loader.classList.remove('hidden');
+            else loader.classList.add('hidden');
+        }
+
+        function showToast(text, iconStr = '✓') {
+            document.getElementById('toast-icon').innerText = iconStr;
+            document.getElementById('toast-text').innerText = text;
+            const toast = document.getElementById('toast');
+            toast.classList.remove('opacity-0', 'translate-y-20');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-20');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }, 3000);
+        }
+
+        function showConfirm(title, desc, onYes) {
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-desc').innerText = desc;
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            confirmCallback = onYes;
+        }
+
+        document.getElementById('confirm-btn-yes').onclick = function() {
+            if (confirmCallback) confirmCallback();
+            closeModal('confirm-modal');
+        };
+        document.getElementById('confirm-btn-cancel').onclick = function() {
+            closeModal('confirm-modal');
+        };
+
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            document.getElementById(id).classList.add('flex');
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            document.getElementById(id).classList.remove('flex');
+        }
+
+        function setupTanggalLahirOptions() {
+            const tglSelect = document.getElementById('add-linmas-tgl');
+            if(tglSelect) {
+                tglSelect.innerHTML = '<option value="">Tgl</option>';
+                for(let i = 1; i <= 31; i++) {
+                    tglSelect.innerHTML += `<option value="${i}">${i}</option>`;
+                }
+            }
+        }
+
+        // KONEKSI BACKEND / PREVIEW SIMULATION ENGINE
+        function callBackend(functionName, argsArray, onSuccess) {
+            showLoader(true);
+            if (!IS_PREVIEW && typeof google !== 'undefined' && google.script && google.script.run) {
+                let runner = google.script.run
+                    .withSuccessHandler((res) => {
+                        showLoader(false);
+                        if (res && res.success === false) showToast(res.message, "❌");
+                        else if(onSuccess) onSuccess(res);
+                    })
+                    .withFailureHandler((err) => {
+                        showLoader(false);
+                        showToast("Koneksi Server Gagal: " + err, "❌");
+                    });
+                runner[functionName].apply(runner, argsArray);
+            } else {
+                // SIMULASI OFFLINE PREVIEW (DATA DUMMY)
+                setTimeout(() => {
+                    showLoader(false);
+                    let res = { success: true, message: "Berhasil disimpan dalam Mode Preview!" };
+
+                    if (functionName === 'loginUser') {
+                        const [email, password] = argsArray;
+                        // Konfigurasi Login Dummy Sesuai Instruksi Tambahan & Sistem Bawaan
+                        let found = databasePengguna.find(u => (u.Email === email || u.Nama.toLowerCase() === email.toLowerCase()) && u.Password === password);
+                        
+                        // Default fallback untuk Admin / Peserta edudigital
+                        if (!found) {
+                            if (email === "admin" && password === "edudigital") {
+                                found = { ID_User: "U000", Nama: "Admin Demo", Email: "admin", Password: "edudigital", Role: "ADMIN", Wilayah_Tugas: "Kepanjen", Status_Akun: "Aktif" };
+                            } else if (email === "peserta" && password === "edudigital") {
+                                found = { ID_User: "U999", Nama: "Peserta Demo", Email: "peserta", Password: "edudigital", Role: "USER", Wilayah_Tugas: "Panggungrejo", Status_Akun: "Aktif" };
+                            } else if (email === "admin@malangkab.go.id" && password === "admin") {
+                                found = { ID_User: "U001", Nama: "Super Admin SIDALMAS", Email: "admin@malangkab.go.id", Password: "admin", Role: "SUPERADMIN", Wilayah_Tugas: "Semua Wilayah", Status_Akun: "Aktif" };
+                            }
+                        }
+
+                        if(found) res = { success: true, user: found };
+                        else res = { success: false, message: "Email / Password salah! Gunakan akun demo yang tersedia." };
+                    }
+                    else if (functionName === 'getInitialData') {
+                        if (databasePengguna.length === 0) {
+                            databasePengguna = [
+                                { ID_User: "U001", Nama: "Super Admin SIDALMAS", Email: "admin@malangkab.go.id", Password: "admin", Role: "SUPERADMIN", Wilayah_Tugas: "Semua Wilayah", Status_Akun: "Aktif" },
+                                { ID_User: "U002", Nama: "Admin Demo", Email: "admin", Password: "edudigital", Role: "ADMIN", Wilayah_Tugas: "Kepanjen", Status_Akun: "Aktif" },
+                                { ID_User: "U003", Nama: "Peserta Demo", Email: "peserta", Password: "edudigital", Role: "USER", Wilayah_Tugas: "Panggungrejo", Status_Akun: "Aktif" }
+                            ];
+                        }
+                        if (databaseLinmas.length === 0) {
+                            databaseLinmas = [
+                                { ID_Linmas: "LM001", NAMA: "Budi Santoso", NIK: "3507121501880001", DESA_KEL: "Panggungrejo", DUSUN: "Jl. Panji No. 12", RT: "02", RW: "04", TGL: "15", BULAN: "Januari", "TAHUN LAHIR": "1988", KECAMATAN: "Kepanjen", PROFESI_PEKERJAAN: "Swasta", Status: "Aktif" },
+                                { ID_Linmas: "LM002", NAMA: "Heru Prasetyo", NIK: "3507122409910002", DESA_KEL: "Ardirejo", DUSUN: "Jl. Sudirman No. 45", RT: "01", RW: "02", TGL: "24", BULAN: "September", "TAHUN LAHIR": "1991", KECAMATAN: "Kepanjen", PROFESI_PEKERJAAN: "Wiraswasta", Status: "Aktif" }
+                            ];
+                        }
+                        if (skSatlinmas.length === 0) {
+                            skSatlinmas = [
+                                { ID_SK: "SK001", No_SK: "140/390/35.07.12.2003/2026", Tanggal_SK: "2026-01-10", Kecamatan: "Kepanjen", Desa_Kelurahan: "Panggungrejo", Link_File_Drive: "https://drive.google.com" }
+                            ];
+                        }
+                        if (databaseKta.length === 0) {
+                            databaseKta = [
+                                { ID_DESA: "DESA350712001", Tanggal_CETAK: "2026-02-01", Kecamatan: "Kepanjen", Desa_Kelurahan: "Panggungrejo", Link_File_Drive: "https://drive.google.com" }
+                            ];
+                        }
+                        if (logStatus.length === 0) {
+                            logStatus = [
+                                { ID_Log: "LOG001", ID_Referensi: "SYS01", Waktu_Update: "2026-08-21 08:00", Status_Baru: "Sistem Ready", Catatan_Update: "Inisialisasi aplikasi mode preview.", Diupdate_Oleh: "Sistem" }
+                            ];
+                        }
+
+                        res = { success: true, pengguna: databasePengguna, linmas: databaseLinmas, sk: skSatlinmas, logs: logStatus, kta: databaseKta };
+                    }
+                    else if (functionName === 'saveLinmasMember') {
+                        const [data, idEdit] = argsArray;
+                        if(idEdit) {
+                            const idx = databaseLinmas.findIndex(m => m.ID_Linmas === idEdit);
+                            if(idx !== -1) {
+                                databaseLinmas[idx] = { ...databaseLinmas[idx], ...data, NAMA: data.Nama_Lengkap, DESA_KEL: data.Desa_Kelurahan, DUSUN: data.Dusun, "TAHUN LAHIR": data.Thn, PROFESI_PEKERJAAN: data.Pekerjaan };
+                            }
+                        } else {
+                            const newId = "LM" + String(databaseLinmas.length + 1).padStart(3, '0');
+                            databaseLinmas.push({ ID_Linmas: newId, NAMA: data.Nama_Lengkap, NIK: data.NIK, DESA_KEL: data.Desa_Kelurahan, DUSUN: data.Dusun, RT: data.RT, RW: data.RW, TGL: data.Tgl, BULAN: data.Bln, "TAHUN LAHIR": data.Thn, KECAMATAN: data.Kecamatan, PROFESI_PEKERJAAN: data.Pekerjaan, Status: data.Status || "Aktif" });
+                        }
+                    }
+                    else if (functionName === 'saveKtaBackend') {
+                        const [data, idEdit] = argsArray;
+                        if(idEdit) {
+                            const idx = databaseKta.findIndex(k => k.ID_DESA === idEdit);
+                            if(idx !== -1) databaseKta[idx] = data;
+                        } else {
+                            databaseKta.push(data);
+                        }
+                    }
+
+                    if(onSuccess) onSuccess(res);
+                }, 300);
+            }
+        }
+
+        // LOGIN SYSTEM
+        document.getElementById('form-login').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('input-email').value.trim();
+            const password = document.getElementById('input-password').value.trim();
+            document.getElementById('login-error').classList.add('hidden');
+
+            callBackend('loginUser', [email, password], function(res) {
+                if (res.success) {
+                    currentUser = res.user;
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('app-screen').classList.remove('hidden');
+
+                    document.getElementById('profile-name').innerText = currentUser.Nama;
+                    document.getElementById('profile-role').innerText = `${currentUser.Role} • ${currentUser.Wilayah_Tugas}`;
+                    document.getElementById('welcome-message').innerText = `Selamat Datang, ${currentUser.Nama}!`;
+
+                    populateAllLocationDropdowns();
+                    fetchDatabaseData();
+                } else {
+                    document.getElementById('login-error').innerText = res.message || "Email / Password salah!";
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            });
+        });
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('app-screen').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('form-login').reset();
+            showToast("Anda telah keluar dari sistem.", "ℹ️");
+        }
+
+        function fetchDatabaseData() {
+            callBackend('getInitialData', [], function(data) {
+                databasePengguna = data.pengguna || [];
+                databaseLinmas = data.linmas || [];
+                skSatlinmas = data.sk || [];
+                logStatus = data.logs || [];
+                databaseKta = data.kta || [];
+
+                filterDataByRole();
+                applyRolePermissions();
+                updateStatistics();
+                showView(currentActiveView);
+            });
+        }
+
+        function filterDataByRole() {
+            if (currentUser && currentUser.Role !== 'SUPERADMIN') {
+                const w = currentUser.Wilayah_Tugas.toLowerCase().split(',').map(s => s.trim());
+                databaseLinmas = databaseLinmas.filter(i => w.includes(String(i.KECAMATAN).toLowerCase()) || w.includes(String(i.DESA_KEL).toLowerCase()));
+                skSatlinmas = skSatlinmas.filter(i => w.includes(String(i.Kecamatan).toLowerCase()) || w.includes(String(i.Desa_Kelurahan).toLowerCase()));
+                databaseKta = databaseKta.filter(i => w.includes(String(i.Kecamatan).toLowerCase()) || w.includes(String(i.Desa_Kelurahan).toLowerCase()));
+            }
+        }
+
+        function applyRolePermissions() {
+            const isSuper = currentUser && currentUser.Role === 'SUPERADMIN';
+            const tabPengguna = document.getElementById('tab-pengguna');
+            if (isSuper) tabPengguna.classList.remove('hidden');
+            else tabPengguna.classList.add('hidden');
+        }
+
+        function updateStatistics() {
+            document.getElementById('stat-linmas').innerText = databaseLinmas.length;
+            
+            const countAktif = databaseLinmas.filter(m => (m.Status || 'Aktif') === 'Aktif').length;
+            const countNonAktif = databaseLinmas.filter(m => m.Status === 'Non-Aktif').length;
+
+            if(document.getElementById('stat-linmas-aktif')) {
+                document.getElementById('stat-linmas-aktif').innerText = countAktif;
+            }
+            if(document.getElementById('stat-linmas-nonaktif')) {
+                document.getElementById('stat-linmas-nonaktif').innerText = countNonAktif;
+            }
+
+            document.getElementById('stat-sk').innerText = skSatlinmas.length;
+            document.getElementById('stat-kta').innerText = databaseKta.length;
+            document.getElementById('stat-logs').innerText = logStatus.length;
+            document.getElementById('stat-pengguna').innerText = databasePengguna.length;
+            renderCharts();
+        }
+
+        function renderCharts() {
+            if (chartInstanceKec) chartInstanceKec.destroy();
+            if (chartInstanceDesa) chartInstanceDesa.destroy();
+
+            let countKec = {}, countDesa = {};
+            databaseLinmas.forEach(i => {
+                if(i.KECAMATAN) countKec[i.KECAMATAN] = (countKec[i.KECAMATAN] || 0) + 1;
+                if(i.DESA_KEL) countDesa[i.DESA_KEL] = (countDesa[i.DESA_KEL] || 0) + 1;
+            });
+
+            chartInstanceKec = new Chart(document.getElementById('chartKecamatan'), {
+                type: 'bar',
+                data: { labels: Object.keys(countKec), datasets: [{ label: 'Linmas', data: Object.values(countKec), backgroundColor: '#0d9488' }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+
+            chartInstanceDesa = new Chart(document.getElementById('chartDesa'), {
+                type: 'bar',
+                data: { labels: Object.keys(countDesa).slice(0, 7), datasets: [{ label: 'Linmas', data: Object.values(countDesa).slice(0, 7), backgroundColor: '#0284c7' }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function showView(viewId) {
+            currentActiveView = viewId;
+            ['dashboard', 'linmas', 'sk', 'kta', 'log', 'pengguna'].forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                const tab = document.getElementById(`tab-${v}`);
+                if(el) el.classList.add('hidden');
+                if(tab) tab.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 whitespace-nowrap";
+            });
+
+            const activeEl = document.getElementById(`view-${viewId}`);
+            const activeTab = document.getElementById(`tab-${viewId}`);
+            if(activeEl) activeEl.classList.remove('hidden');
+            if(activeTab) activeTab.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-teal-600 text-white shadow whitespace-nowrap";
+
+            if (viewId === 'linmas') renderLinmasTable();
+            if (viewId === 'sk') renderSKTable();
+            if (viewId === 'kta') renderKtaTable();
+            if (viewId === 'log') renderLogTable();
+            if (viewId === 'pengguna') renderPenggunaTable();
+        }
+
+        // RENDER LINMAS 13 KOLOM
+        function renderLinmasTable() {
+            const body = document.getElementById('table-linmas-body');
+            body.innerHTML = '';
+            const q = document.getElementById('search-linmas').value.toLowerCase();
+            const statusFilter = document.getElementById('filter-linmas-status').value;
+
+            const filtered = databaseLinmas.filter(i => {
+                const matchesSearch = (i.NAMA || '').toLowerCase().includes(q) || (i.NIK || '').toLowerCase().includes(q) || (i.DESA_KEL || '').toLowerCase().includes(q) || (i.KECAMATAN || '').toLowerCase().includes(q);
+                const matchesStatus = !statusFilter || i.Status === statusFilter;
+                return matchesSearch && matchesStatus;
+            });
+
+            document.getElementById('linmas-total-count').innerText = filtered.length;
+            const startIdx = (currentPageLinmas - 1) * pageSizeLinmas;
+            const endIdx = Math.min(startIdx + pageSizeLinmas, filtered.length);
+            document.getElementById('linmas-start-idx').innerText = filtered.length ? startIdx + 1 : 0;
+            document.getElementById('linmas-end-idx').innerText = endIdx;
+
+            filtered.slice(startIdx, endIdx).forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition text-center border-b border-slate-200";
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-500 border-r border-slate-200">${item.ID_Linmas || '-'}</td>
+                    <td class="py-2.5 px-3 font-bold text-slate-800 text-left border-r border-slate-200 whitespace-nowrap">${item.NAMA || '-'}</td>
+                    <td class="py-2.5 px-3 font-mono border-r border-slate-200">${item.NIK || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 text-left font-semibold text-teal-700">${item.DESA_KEL || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 text-left">${item.DUSUN || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 font-mono">${item.RT || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 font-mono">${item.RW || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 font-mono">${item.TGL || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200">${item.BULAN || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 font-mono">${item["TAHUN LAHIR"] || item.TAHUN || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 font-bold text-slate-700">${item.KECAMATAN || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200 text-left">${item.PROFESI_PEKERJAAN || '-'}</td>
+                    <td class="py-2.5 px-3 border-r border-slate-200"><span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${item.Status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">${item.Status || 'Aktif'}</span></td>
+                    <td class="py-2.5 px-3">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="editLinmas('${item.ID_Linmas}')" class="px-2 py-1 bg-sky-50 text-sky-600 rounded hover:bg-sky-100 font-bold">Edit</button>
+                            <button onclick="deleteLinmas('${item.ID_Linmas}')" class="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 font-bold">Hapus</button>
+                        </div>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+            lucide.createIcons();
+        }
+
+        // RENDER KTA (5 KOLOM SINKRON SHEET)
+        function renderKtaTable() {
+            const body = document.getElementById('table-kta-body');
+            body.innerHTML = '';
+            const q = document.getElementById('search-kta').value.toLowerCase();
+
+            const filtered = databaseKta.filter(i => 
+                (i.ID_DESA || '').toLowerCase().includes(q) || 
+                (i.Kecamatan || '').toLowerCase().includes(q) || 
+                (i.Desa_Kelurahan || '').toLowerCase().includes(q)
+            );
+
+            filtered.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition text-center border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono font-bold text-slate-700 text-left">${item.ID_DESA || '-'}</td>
+                    <td class="py-3 px-4 font-mono">${item.Tanggal_CETAK || '-'}</td>
+                    <td class="py-3 px-4 font-bold text-slate-700">${item.Kecamatan || '-'}</td>
+                    <td class="py-3 px-4">${item.Desa_Kelurahan || '-'}</td>
+                    <td class="py-3 px-4 text-center">
+                        <a href="${item.Link_File_Drive || '#'}" target="_blank" class="px-3 py-1 bg-sky-50 text-sky-600 border border-sky-200 rounded-lg font-bold hover:bg-sky-100 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i> Buka File
+                        </a>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="deleteKta('${item.ID_DESA}')" class="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 font-bold">Hapus</button>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+            lucide.createIcons();
+        }
+
+        function renderSKTable() {
+            const body = document.getElementById('table-sk-body');
+            body.innerHTML = '';
+            const q = document.getElementById('search-sk').value.toLowerCase();
+
+            skSatlinmas.filter(i => (i.No_SK || '').toLowerCase().includes(q) || (i.Kecamatan || '').toLowerCase().includes(q)).forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition text-center border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono font-bold text-slate-500">${item.ID_SK || '-'}</td>
+                    <td class="py-3 px-4 font-bold text-slate-800">${item.No_SK || '-'}</td>
+                    <td class="py-3 px-4 font-mono">${item.Tanggal_SK || '-'}</td>
+                    <td class="py-3 px-4">${item.Kecamatan || '-'}</td>
+                    <td class="py-3 px-4">${item.Desa_Kelurahan || '-'}</td>
+                    <td class="py-3 px-4 text-center"><a href="${item.Link_File_Drive || '#'}" target="_blank" class="px-3 py-1 bg-amber-50 text-amber-600 rounded-lg font-bold border border-amber-200">Buka SK</a></td>
+                    <td class="py-3 px-4 text-center"><button onclick="deleteSK('${item.ID_SK}')" class="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 font-bold">Hapus</button></td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        function renderLogTable() {
+            const body = document.getElementById('table-log-body');
+            body.innerHTML = '';
+            logStatus.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition text-center border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono font-bold text-slate-500">${item.ID_Log || '-'}</td>
+                    <td class="py-3 px-4 font-mono font-bold text-sky-600">${item.ID_Referensi || '-'}</td>
+                    <td class="py-3 px-4 font-mono text-[11px]">${item.Waktu_Update || '-'}</td>
+                    <td class="py-3 px-4"><span class="px-2 py-0.5 bg-slate-900 text-white rounded font-bold">${item.Status_Baru || '-'}</span></td>
+                    <td class="py-3 px-4 text-left italic text-slate-600">${item.Catatan_Update || '-'}</td>
+                    <td class="py-3 px-4 font-mono text-slate-500">${item.Diupdate_Oleh || '-'}</td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        function renderPenggunaTable() {
+            const body = document.getElementById('table-pengguna-body');
+            body.innerHTML = '';
+            databasePengguna.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition text-center border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-left font-bold text-slate-800">${item.Nama}</td>
+                    <td class="py-3 px-4 text-left"><span class="block">${item.Email}</span><span class="text-[9px] bg-slate-100 px-2 py-0.5 rounded font-bold text-slate-600">${item.Role}</span></td>
+                    <td class="py-3 px-4 text-left font-mono text-[11px]">${item.Wilayah_Tugas}</td>
+                    <td class="py-3 px-4"><span class="px-2 py-1 rounded-full text-[9px] font-bold ${item.Status_Akun === 'Diblokir' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">${item.Status_Akun || 'Aktif'}</span></td>
+                    <td class="py-3 px-4"><button onclick="deletePengguna('${item.ID_User}')" class="px-2 py-1 bg-red-50 text-red-600 rounded font-bold hover:bg-red-100">Hapus</button></td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        // FORM HANDLERS & MODAL UTILITIES
+        function openAddLinmasModal() {
+            document.getElementById('form-linmas').reset();
+            document.getElementById('linmas-id-edit').value = '';
+            document.getElementById('linmas-modal-title').innerText = 'Tambah Anggota Linmas Baru';
+            openModal('modal-linmas');
+        }
+
+        function editLinmas(id) {
+            const item = databaseLinmas.find(m => String(m.ID_Linmas) === String(id));
+            if (!item) {
+                showToast("Data Linmas tidak ditemukan!", "❌");
+                return;
+            }
+            document.getElementById('linmas-id-edit').value = item.ID_Linmas || id;
+            document.getElementById('add-linmas-nama').value = item.NAMA || item.Nama_Lengkap || '';
+            document.getElementById('add-linmas-nik').value = item.NIK || '';
+            
+            if (item.KECAMATAN) {
+                document.getElementById('add-linmas-kec').value = item.KECAMATAN;
+                updateDesaDropdown('add-linmas-kec', 'add-linmas-desa');
+            }
+            if (item.DESA_KEL) {
+                document.getElementById('add-linmas-desa').value = item.DESA_KEL;
+            }
+            
+            document.getElementById('add-linmas-dusun').value = item.DUSUN || '';
+            document.getElementById('add-linmas-rt').value = item.RT || '';
+            document.getElementById('add-linmas-rw').value = item.RW || '';
+            document.getElementById('add-linmas-tgl').value = item.TGL || '';
+            document.getElementById('add-linmas-bln').value = item.BULAN || item.Bln || '';
+            document.getElementById('add-linmas-thn').value = item["TAHUN LAHIR"] || item.TAHUN || item.Thn || '';
+            document.getElementById('add-linmas-pekerjaan').value = item.PROFESI_PEKERJAAN || item.Pekerjaan || '';
+            document.getElementById('add-linmas-status').value = item.Status || 'Aktif';
+
+            document.getElementById('linmas-modal-title').innerText = 'Edit Data Anggota Linmas';
+            openModal('modal-linmas');
+        }
+
+        function submitLinmasData(e) {
+            e.preventDefault();
+            const data = {
+                Nama_Lengkap: document.getElementById('add-linmas-nama').value,
+                NIK: document.getElementById('add-linmas-nik').value,
+                Kecamatan: document.getElementById('add-linmas-kec').value,
+                Desa_Kelurahan: document.getElementById('add-linmas-desa').value,
+                Dusun: document.getElementById('add-linmas-dusun').value,
+                RT: document.getElementById('add-linmas-rt').value,
+                RW: document.getElementById('add-linmas-rw').value,
+                Tgl: document.getElementById('add-linmas-tgl').value,
+                Bln: document.getElementById('add-linmas-bln').value,
+                Thn: document.getElementById('add-linmas-thn').value,
+                Pekerjaan: document.getElementById('add-linmas-pekerjaan').value,
+                Status: document.getElementById('add-linmas-status').value
+            };
+            const idEdit = document.getElementById('linmas-id-edit').value;
+
+            callBackend('saveLinmasMember', [data, idEdit, currentUser ? currentUser.Nama : "Admin"], function(res) {
+                closeModal('modal-linmas');
+                showToast(res.message || "Data Anggota Linmas Berhasil Disimpan!");
+                fetchDatabaseData();
+            });
+        }
+
+        function openAddKtaModal() {
+            document.getElementById('form-kta').reset();
+            document.getElementById('kta-id-edit').value = '';
+            document.getElementById('kta-modal-title').innerText = 'Tambah Data KTA Satlinmas';
+            openModal('modal-kta');
+        }
+
+        function editKta(idDesa) {
+            const item = databaseKta.find(k => String(k.ID_DESA) === String(idDesa));
+            if (!item) {
+                showToast("Data KTA tidak ditemukan!", "❌");
+                return;
+            }
+            document.getElementById('kta-id-edit').value = item.ID_DESA;
+            document.getElementById('add-kta-iddesa').value = item.ID_DESA || '';
+            document.getElementById('add-kta-tglcetak').value = item.Tanggal_CETAK || '';
+            
+            if (item.Kecamatan) {
+                document.getElementById('add-kta-kec').value = item.Kecamatan;
+                updateDesaDropdown('add-kta-kec', 'add-kta-desa');
+            }
+            if (item.Desa_Kelurahan) {
+                document.getElementById('add-kta-desa').value = item.Desa_Kelurahan;
+            }
+            
+            document.getElementById('add-kta-link').value = item.Link_File_Drive || '';
+            document.getElementById('kta-modal-title').innerText = 'Edit Data KTA Satlinmas';
+            openModal('modal-kta');
+        }
+
+        function submitKtaData(e) {
+            e.preventDefault();
+            const data = {
+                ID_DESA: document.getElementById('add-kta-iddesa').value,
+                Tanggal_CETAK: document.getElementById('add-kta-tglcetak').value,
+                Kecamatan: document.getElementById('add-kta-kec').value,
+                Desa_Kelurahan: document.getElementById('add-kta-desa').value,
+                Link_File_Drive: document.getElementById('add-kta-link').value
+            };
+            const idEdit = document.getElementById('kta-id-edit').value;
+
+            callBackend('saveKtaBackend', [data, idEdit, currentUser ? currentUser.Nama : "Admin"], function(res) {
+                closeModal('modal-kta');
+                showToast("Data KTA Berhasil Disimpan!");
+                fetchDatabaseData();
+            });
+        }
+
+        function openAddSKModal() { openModal('modal-sk'); }
+        function submitSKData(e) {
+            e.preventDefault();
+            const data = {
+                No_SK: document.getElementById('add-sk-nosk').value,
+                Tanggal_SK: document.getElementById('add-sk-tgl').value,
+                Kecamatan: document.getElementById('add-sk-kec').value,
+                Desa_Kelurahan: document.getElementById('add-sk-desa').value,
+                Link_File_Drive: document.getElementById('add-sk-link').value
+            };
+            callBackend('saveSkSatlinmas', [data, null, null, currentUser ? currentUser.Nama : "Admin"], function(res) {
+                closeModal('modal-sk');
+                showToast("Data SK Berhasil Disimpan!");
+                fetchDatabaseData();
+            });
+        }
+
+        function openAddPenggunaModal() { openModal('modal-pengguna'); }
+        function submitPenggunaData(e) {
+            e.preventDefault();
+            const data = {
+                Nama: document.getElementById('pengguna-form-nama').value,
+                Email: document.getElementById('pengguna-form-email').value,
+                Password: document.getElementById('pengguna-form-password').value,
+                Role: document.getElementById('pengguna-form-role').value,
+                Wilayah_Tugas: "Semua Wilayah"
+            };
+            callBackend('savePenggunaBackend', [data, null], function(res) {
+                closeModal('modal-pengguna');
+                showToast("Akun Pengguna Berhasil Disimpan!");
+                fetchDatabaseData();
+            });
+        }
+
+        function deleteLinmas(id) {
+            showConfirm("Hapus Anggota Linmas?", "Data anggota ini akan dihapus permanen.", () => {
+                callBackend('deleteLinmasMember', [id, currentUser ? currentUser.Nama : "Admin"], () => {
+                    showToast("Anggota berhasil dihapus", "🗑️");
+                    fetchDatabaseData();
+                });
+            });
+        }
+
+        function deleteKta(idDesa) {
+            showConfirm("Hapus Data KTA?", "Data KTA ini akan dihapus dari sheet.", () => {
+                callBackend('deleteKtaBackend', [idDesa, currentUser ? currentUser.Nama : "Admin"], () => {
+                    showToast("KTA berhasil dihapus", "🗑️");
+                    fetchDatabaseData();
+                });
+            });
+        }
+
+        function deleteSK(id) {
+            showConfirm("Hapus SK Satlinmas?", "Arsip SK ini akan dihapus.", () => {
+                callBackend('deleteSkSatlinmas', [id, currentUser ? currentUser.Nama : "Admin"], () => {
+                    showToast("SK berhasil dihapus", "🗑️");
+                    fetchDatabaseData();
+                });
+            });
+        }
+
+        function deletePengguna(id) {
+            showConfirm("Hapus Pengguna?", "Akun ini tidak akan dapat mengakses sistem lagi.", () => {
+                callBackend('hapusPenggunaBackend', [id], () => {
+                    showToast("Pengguna dihapus", "🗑️");
+                    fetchDatabaseData();
+                });
+            });
+        }
+
+        function downloadExcelLinmas() {
+            const ws = XLSX.utils.json_to_sheet(databaseLinmas);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Linmas Kab Malang");
+            XLSX.writeFile(wb, "Data_Linmas_Kab_Malang.xlsx");
+            showToast("Mengunduh Berkas Excel...", "📊");
+        }
+
+        function populateAllLocationDropdowns() {
+            ['add-linmas-kec', 'add-sk-kec', 'add-kta-kec'].forEach(id => {
+                const s = document.getElementById(id);
+                if(s) {
+                    s.innerHTML = '';
+                    Object.keys(DATA_WILAYAH).sort().forEach(k => s.innerHTML += `<option value="${k}">${k}</option>`);
+                }
+            });
+            updateDesaDropdown('add-linmas-kec', 'add-linmas-desa');
+            updateDesaDropdown('add-sk-kec', 'add-sk-desa');
+            updateDesaDropdown('add-kta-kec', 'add-kta-desa');
+        }
+
+        function updateDesaDropdown(kecId, desaId) {
+            const kec = document.getElementById(kecId).value;
+            const d = document.getElementById(desaId);
+            if(d && DATA_WILAYAH[kec]) {
+                d.innerHTML = '';
+                DATA_WILAYAH[kec].sort().forEach(v => d.innerHTML += `<option value="${v}">${v}</option>`);
+            }
+        }
+
+        function onRoleChange() {}
+        function prevPageLinmas() { if(currentPageLinmas > 1) { currentPageLinmas--; renderLinmasTable(); } }
+        function nextPageLinmas() { currentPageLinmas++; renderLinmasTable(); }
+        function refreshData() { fetchDatabaseData(); showToast("Data diperbarui", "🔄"); }
+    </script>
 </body>
 </html>
